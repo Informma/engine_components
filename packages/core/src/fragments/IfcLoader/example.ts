@@ -139,16 +139,33 @@ fragmentIfcLoader.settings.webIfc.COORDINATE_TO_ORIGIN = true;
   :::
 */
 
-async function loadIfc() {
+async function loadFile(name: string){
   const file = await fetch(
-    "https://thatopen.github.io/engine_components/resources/small.ifc",
+    `/resources/${name}`,
   );
   const data = await file.arrayBuffer();
   const buffer = new Uint8Array(data);
   const model = await fragmentIfcLoader.load(buffer);
-  model.name = "example";
+  model.name = name;
   world.scene.three.add(model);
 }
+
+async function loadIfc() {
+  // const file = await fetch(
+  //   "/resources/T2D1-204105-AGW-M3D-0000-SBR-000001.ifc",
+  // );
+  // const data = await file.arrayBuffer();
+  // const buffer = new Uint8Array(data);
+  // const model = await fragmentIfcLoader.load(buffer);
+  // model.name = "example";
+  // world.scene.three.add(model);
+  loadFile("T2D1-203100-AGW-M3D-0000-CAL-009993_ZONE 20 DESIGN.ifc.ifc");
+  loadFile("T2D1-203300-AGW-M3D-0000-CDR-002201_DRAINAGE.ifc");
+  loadFile("T2D1-204105-AGW-M3D-0000-SBR-000001.ifc");
+  loadFile("T2D1-204800-AGW-M3D-0000-SNW-000001.ifc");
+  loadFile("T2D1-208500-AGW-M3D-0000-UUT-000021_CST_A.ifc");
+}
+
 
 /* MD
   If you want to get the resulted model every time a new model is loaded, you can subscribe to the following event anywhere in your app:

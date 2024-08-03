@@ -21,6 +21,39 @@ import Stats from "stats.js";
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 
+/*
+  This promise completer enables you to create a promise that can manually be
+  resolved based on other asynchronous code.
+ */
+class PromiseCompleter<T> {
+  _promise;
+  // @ts-ignore
+  _resolve: (value: T | PromiseLike<T>) => void;
+  // @ts-ignore
+  _reject: (reason?: any) => void;
+  constructor() {
+    this._promise = new Promise<T>((resolve, reject) => {
+      this._resolve = resolve;
+      this._reject = reject;
+    });
+  }
+
+  isCompleted = false;
+
+  get promise() {
+    return this._promise;
+  }
+
+  resolve(value: T) {
+    this.isCompleted = true;
+    this._resolve(value);
+  }
+
+  resolveError(error: any) {
+    this._reject(error);
+  }
+}
+
 /* MD
   ### 🌎 Setting up a simple scene
   ---
@@ -125,6 +158,7 @@ tiler.settings.minAssetsSize = 1000;
   The first file we need is a JSON which is the entry point of the geometries streaming. That JSON must have the following structure:
   */
 
+// @ts-ignore this is an example and not used in the code
 interface GeometriesStreaming {
   assets: {
     id: number;
@@ -229,25 +263,50 @@ tiler.onIfcLoaded.add((groupBuffer) => {
   Now that we've setup the main listeners, the last thing is to download all the data once the conversion has fininshed. To do so, we can use the progress event:
 */
 
-function downloadFile(name: string, ...bits: (Uint8Array | string)[]) {
-  const file = new File(bits, name);
-  const anchor = document.createElement("a");
-  const url = URL.createObjectURL(file);
-  anchor.href = url;
-  anchor.download = file.name;
-  anchor.click();
-  URL.revokeObjectURL(url);
+let currentDirHandle: FileSystemDirectoryHandle;
+let tilerPromise: PromiseCompleter<void>;
+
+async function downloadFile(name: string, ...bits: (Uint8Array | string)[]) {
+  // const file = new File(bits, name);
+  // const anchor = document.createElement("a");
+  // const url = URL.createObjectURL(file);
+  // anchor.href = url;
+  // anchor.download = file.name;
+  // anchor.click();
+  // URL.revokeObjectURL(url);
+
+  const fileHandle = await currentDirHandle.getFileHandle(name, {
+    create: true,
+  });
+  const writableStream = await fileHandle.createWritable();
+  // eslint-disable-next-line eqeqeq
+  if(bits.length == 1){
+    const bytes = bits[0];
+    const blob = new Blob(bits);
+    await writableStream.write(blob);
+    // if (bytes instanceof Uint8Array) {
+    //   await writableStream.write(bytes.buffer);
+    // } else {
+    //   await writableStream.write(bytes);
+    // }
+  } else {
+    console.error("more bytes");
+  }
+  await writableStream.close();
 }
 
 async function downloadFilesSequentially(
   fileList: { name: string; bits: (Uint8Array | string)[] }[],
 ) {
+  const downloads = [];
   for (const { name, bits } of fileList) {
-    downloadFile(name, ...bits);
-    await new Promise((resolve) => {
-      setTimeout(resolve, 100);
-    });
+    downloads.push(downloadFile(name, ...bits));
+    // await new Promise((resolve) => {
+    //   setTimeout(resolve, 100);
+    // });
   }
+  await Promise.all(downloads);
+  tilerPromise.resolve();
 }
 
 tiler.onProgress.add((progress) => {
@@ -277,15 +336,34 @@ tiler.onProgress.add((progress) => {
   Great! Now that we have everything setup, is time to finally convert the IFC file. In order to trigger the conversion, we can just do the following:
 */
 
-async function processFile() {
-  const fetchedIfc = await fetch(
-    "https://thatopen.github.io/engine_components/resources/small.ifc",
-  );
+let rootDirHandle: FileSystemDirectoryHandle;
+let streamCount = 1;
+
+async function processFile(name: string) {
+  const dirName = `Stream${streamCount.toString().padStart(3, "0")}`;
+  currentDirHandle = await rootDirHandle.getDirectoryHandle(dirName, {
+    create: true,
+  });
+  const fetchedIfc = await fetch(`/resources/${name}`);
   const ifcBuffer = await fetchedIfc.arrayBuffer();
   // We will need this information later to also convert the properties
   const ifcArrayBuffer = new Uint8Array(ifcBuffer);
   // This triggers the conversion, so the listeners start to be called
+  tilerPromise = new PromiseCompleter<void>();
   await tiler.streamFromBuffer(ifcArrayBuffer);
+  await tilerPromise.promise;
+  streamCount++;
+}
+
+async function processFiles(){
+  rootDirHandle = await window.showDirectoryPicker();
+  await processFile(
+    "T2D1-203100-AGW-M3D-0000-CAL-009993_ZONE 20 DESIGN.ifc.ifc",
+  );
+  await processFile("T2D1-203300-AGW-M3D-0000-CDR-002201_DRAINAGE.ifc");
+  await processFile("T2D1-204105-AGW-M3D-0000-SBR-000001.ifc");
+  await processFile("T2D1-204800-AGW-M3D-0000-SNW-000001.ifc");
+  await processFile("T2D1-208500-AGW-M3D-0000-UUT-000021_CST_A.ifc");
 }
 
 /* MD
@@ -325,7 +403,7 @@ const panel = BUI.Component.create<BUI.PanelSection>(() => {
       
         <bim-button label="Load IFC"
           @click="${() => {
-            processFile();
+            processFiles();
           }}">
         </bim-button>  
       

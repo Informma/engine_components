@@ -71,14 +71,14 @@ world.scene.three.background = null;
 
 const loader = components.get(OBCF.IfcStreamer);
 loader.world = world;
-loader.dbCleaner.enabled = true;
+loader.dbCleaner.enabled = false;
 
 /* MD
 Now, we need to set the base URL where the streamer needs to look for the tiles. In our case, we'll use the tiles we have prepared in our repository, but this should also work with your own backend.
 */
 
 loader.url =
-  "https://thatopen.github.io/engine_components/resources/streaming/";
+  "/resources/Stream001/";
 
 /* MD
   ### 📺 Streaming the model
@@ -106,8 +106,8 @@ async function loadModel(geometryURL: string, propertiesURL?: string) {
 */
 
 await loadModel(
-  "https://thatopen.github.io/engine_components/resources/streaming/small.ifc-processed.json",
-  "https://thatopen.github.io/engine_components/resources/streaming/small.ifc-processed-properties.json",
+   `${loader.url}small.ifc-processed.json`/*,
+  "https://thatopen.github.io/engine_components/resources/streaming/small.ifc-processed-properties.json",*/
 );
 
 /* MD
@@ -145,9 +145,11 @@ You can also customize the loader through the `culler` property:
 - maxLostTime determines how long an object must be lost to remove it from memory.
 */
 
-loader.culler.threshold = 10;
+loader.culler.threshold = 1;
 loader.culler.maxHiddenTime = 1000;
 loader.culler.maxLostTime = 3000;
+loader.culler.bboxThreshold = 1000;
+//loader.culler.enabled = false;
 
 /* MD
   ### ⏱️ Measuring the performance (optional)
@@ -164,6 +166,13 @@ stats.dom.style.zIndex = "unset";
 world.renderer.onBeforeUpdate.add(() => stats.begin());
 world.renderer.onAfterUpdate.add(() => stats.end());
 
+loader.culler.renderDebugFrame = true;
+const debugFrame = loader.culler.renderer.domElement;
+document.body.appendChild(debugFrame);
+debugFrame.style.position = "fixed";
+debugFrame.style.left = "0";
+debugFrame.style.bottom = "0";
+//debugFrame.style.visibility = "collapse";
 /* MD
   ### 🎉 Wrap up
   ---
